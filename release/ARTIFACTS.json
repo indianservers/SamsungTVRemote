@@ -1,21 +1,26 @@
 {
   "package": "com.indianservers.samsungsmarttvremote",
-  "versionName": "3.0.1",
-  "versionCode": 4,
+  "versionName": "4.1.0",
+  "versionCode": 6,
   "minSdk": 26,
   "targetSdk": 37,
   "releaseSigned": false,
   "signatureEntries": 0,
+  "unitTests": 64,
+  "androidTests": 21,
   "artifacts": [
     {
       "path": "app/build/outputs/apk/debug/app-debug.apk",
-      "bytes": 13969411,
-      "sha256": "FC75EBBBBD2D48EE270D8F38E9230FC34DBE4304AE79B342951A58406BF88EA0"
+      "bytes": 14104854,
+      "sha256": "7710DE9E85C126494D564953E290175351DB550A75EB2A4C96D984B5250ACF7D",
+      "includesPolicyDisclosureRevision": true
     },
     {
       "path": "app/build/outputs/bundle/release/app-release.aab",
-      "bytes": 4441342,
-      "sha256": "564BC6F03BF322FC9946B611CD9A4225D70D6579FD8722F17BABCCD4B9A0544D"
+      "bytes": 4679119,
+      "sha256": "11694B4080AB8E6409BDFA85ED447F2864009B22DC5AAD4ABF071C0D5FBD713B",
+      "includesPolicyDisclosureRevision": false
     }
-  ]
+  ],
+  "androidTestsNote": "21 passed before disclosure-only revision; not rerun for text changes."
 }

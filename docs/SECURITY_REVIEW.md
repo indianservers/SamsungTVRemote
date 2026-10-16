@@ -25,3 +25,7 @@ This is an implementation/source review and automated verification, not an indep
 ## Remaining release review
 
 Validate signed/minified runtime behavior, physical TV authorization/revocation/TLS quirks, real network interruptions, widget hosts, dependency updates and Play pre-launch findings. Complete Data Safety and actual support/privacy practices with the publisher. Unsupported/unverified TV capabilities remain disabled or explicitly labeled candidates.
+
+## Universal local-media extension (4.0)
+
+UPnP device/schema/control URLs are constrained to the selected numeric private IP, with no redirects, credentials, external XML entities or oversized responses. Advertised actions/ranges and live transport queries gate media sliders. HTTP media actions carry no Samsung pairing token. Generation guards, a serialized media lock, foreground lifecycle cancellation and endpoint-scoped persistence isolate TVs. A last-moment timeline query rejects a changed track identity before seeking. Brand choice never grants a Samsung TLS exception or claims hardware verification.

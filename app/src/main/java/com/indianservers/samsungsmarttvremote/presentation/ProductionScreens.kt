@@ -31,8 +31,8 @@ import kotlinx.coroutines.*
 
 @Composable internal fun Onboarding(onDone: ()->Unit) {
     var step by rememberSaveable { mutableIntStateOf(0) }
-    val headings=listOf("Control Your Samsung TV","Connect to the Same Wi-Fi","Pair Your Television","Start Controlling")
-    val details=listOf("One thoughtful remote for compatible Samsung Smart TVs. Independent app; not endorsed by Samsung.","Your phone and TV need a reachable local network. Guest Wi-Fi isolation and VPNs can prevent discovery.","Select your TV, then approve Smart TV Remote using the TV's existing remote. Authorization is never bypassed.","Navigate, adjust volume and use the touchpad. Keyboard and app shortcuts are enabled only with appropriate TV support.")
+    val headings=listOf("Control Your TV","Connect to the Same Wi-Fi","Pair Your Television","Start Controlling")
+    val details=listOf("One remote for Samsung controls and compatible local-media TVs. Independent app; not endorsed by manufacturers.","Your phone and TV need a reachable local network. Guest Wi-Fi isolation and VPNs can prevent discovery.","Select your TV, then approve Smart TV Remote using the TV's existing remote. Authorization is never bypassed.","Navigate, adjust volume and use the touchpad. Keyboard and app shortcuts are enabled only with appropriate TV support.")
     Spacer(Modifier.height(20.dp))
     Surface(shape=RoundedCornerShape(32.dp),color=MaterialTheme.colorScheme.primary) { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.indianservers.samsungsmarttvremote.R.drawable.ic_remote_foreground),contentDescription="Original television and remote illustration",modifier=Modifier.size(180.dp)) }
     Text("${step+1} OF 4",color=MaterialTheme.colorScheme.primary,fontSize=12.sp)
@@ -51,7 +51,7 @@ import kotlinx.coroutines.*
     var edit by remember { mutableStateOf<DeviceProfile?>(null) }
     var deleting by remember { mutableStateOf<DeviceProfile?>(null) }
     Text("Your televisions",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-    Text("Saved independently. One active remote at a time.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Choose a TV to open its remote. Each device keeps its own preferences.",color=MaterialTheme.colorScheme.onSurfaceVariant)
     if(profiles.isEmpty()) Text("No paired TVs yet. Discover a television and approve pairing on its screen.")
     profiles.forEach { profile ->
         val selected=state.tv?.id==profile.tv.id
@@ -60,11 +60,13 @@ import kotlinx.coroutines.*
             Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                 RemoteGlyph(RemoteKey.SOURCE,MaterialTheme.colorScheme.primary)
                 Text(profile.friendlyName,fontWeight=FontWeight.Bold,fontSize=22.sp)
-                Text("${profile.room} • ${profile.tv.model}")
-                Text("${profile.tv.ip}:${profile.tv.port}",fontSize=13.sp)
-                Text(if(selected) "Selected • ${state.status}" else "Saved • availability not checked",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${profile.room} • ${profile.tv.brand}")
+                Text(if(selected) state.status.label() else "Saved • availability not checked",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                var details by remember(profile.tv.id) { mutableStateOf(false) }
+                TextButton(onClick={details=!details}) { Text(if(details) "Hide technical details" else "Model & connection details") }
+                if(details) Text("${profile.tv.model}\n${profile.tv.ip}:${profile.tv.port}\n${if(profile.tv.platform==TvPlatform.Dlna) "Local media adapter • no menu navigation" else "Samsung WebSocket adapter"}",fontSize=13.sp)
                 if(profile.tv.port==8001) Text("Unencrypted local connection; use a trusted network.",fontSize=12.sp)
-                Button(onClick={vm.connectProfile(profile);onRemote()},modifier=Modifier.heightIn(min=52.dp)) { Text(if(selected) "Reconnect this TV" else "Switch to this TV") }
+                Button(onClick={if(!selected || state.status!=Status.Connected) vm.connectProfile(profile);onRemote()},modifier=Modifier.heightIn(min=52.dp)) { Text(if(selected && state.status==Status.Connected) "Open remote" else if(selected) "Reconnect this TV" else "Switch to this TV") }
                 Row { TextButton(onClick={edit=profile},modifier=Modifier.heightIn(min=48.dp)) { Text("Device settings") }; TextButton(onClick={deleting=profile},modifier=Modifier.heightIn(min=48.dp)) { Text("Remove") } }
             }
         }
@@ -87,11 +89,28 @@ import kotlinx.coroutines.*
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val haptics by vm.haptics.collectAsStateWithLifecycle()
     Text("Themes and appearance",style=MaterialTheme.typography.headlineSmall)
-    RemoteTheme.entries.forEach { theme -> FilterChip(selected=appearance.theme==theme,onClick={vm.appearance { it.copy(theme=theme) }},label={Text(when(theme) { RemoteTheme.SnowWhite->"Snow White";RemoteTheme.MidnightDark->"Midnight Dark";RemoteTheme.RoyalBlue->"Royal Blue";RemoteTheme.Minimal->"Minimal Remote";RemoteTheme.System->"Follow system" })},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) }
-    Text("Button size")
+    RemoteTheme.entries.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        row.forEach { theme ->
+            val selected=appearance.theme==theme
+            OutlinedCard(onClick={vm.appearance { it.copy(theme=theme) }},modifier=Modifier.weight(1f),border=BorderStroke(if(selected) 2.dp else 1.dp,if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+                val dark=theme in setOf(RemoteTheme.MidnightDark,RemoteTheme.RoyalBlue)
+                Column(Modifier.fillMaxWidth().padding(12.dp),horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Surface(color=if(dark) androidx.compose.ui.graphics.Color(0xFF10203C) else androidx.compose.ui.graphics.Color(0xFFF1F5F9),shape=RoundedCornerShape(12.dp),modifier=Modifier.fillMaxWidth().height(72.dp)) {
+                        Column(horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+                            Surface(color=androidx.compose.ui.graphics.Color(0xFF2563EB),shape=androidx.compose.foundation.shape.CircleShape,modifier=Modifier.size(36.dp)) { Box(contentAlignment=androidx.compose.ui.Alignment.Center) { Text("OK",color=androidx.compose.ui.graphics.Color.White,fontSize=11.sp) } }
+                            Text("−    ⌂    +",color=if(dark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.DarkGray,fontSize=12.sp)
+                        }
+                    }
+                    Text((if(selected) "✓ " else "")+when(theme) { RemoteTheme.SnowWhite->"Snow White";RemoteTheme.MidnightDark->"Midnight Dark";RemoteTheme.RoyalBlue->"Royal Blue";RemoteTheme.Minimal->"Minimal Remote";RemoteTheme.System->"Follow system" },style=MaterialTheme.typography.labelMedium,modifier=Modifier.padding(top=8.dp))
+                }
+            }
+        }
+        if(row.size==1) Spacer(Modifier.weight(1f))
+    } }
+    Text("Button size • ${if(appearance.buttonSize<1.05f) "Standard" else if(appearance.buttonSize<1.15f) "Large" else "Extra large"}")
     var size by remember(appearance.buttonSize) { mutableFloatStateOf(appearance.buttonSize) }
     Slider(value=size,onValueChange={size=it},onValueChangeFinished={vm.appearance { it.copy(buttonSize=size) }},valueRange=1f..1.2f,steps=1)
-    Text("Animation intensity • 0 removes decorative movement")
+    Text("Animation • ${if(appearance.motion<.1f) "Off" else if(appearance.motion<.75f) "Reduced" else "Full"}")
     var motion by remember(appearance.motion) { mutableFloatStateOf(appearance.motion) }
     Slider(value=motion,onValueChange={motion=it},onValueChangeFinished={vm.appearance { it.copy(motion=motion) }},valueRange=0f..1f,steps=1)
     Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Text("Haptic feedback",Modifier.weight(1f));Switch(checked=haptics,onCheckedChange=vm::haptics) }
@@ -107,7 +126,7 @@ import kotlinx.coroutines.*
     val scope=rememberCoroutineScope()
     var exportError by remember { mutableStateOf("") }
     Text("Connection diagnostics",style=MaterialTheme.typography.headlineSmall)
-    val lines=listOf("Wi-Fi network available" to network.toString(),"Local-network permission" to if(permission) "Allowed / not required" else "Required", "Selected TV" to (state.tv?.name ?: "None"),"Local IP" to (state.tv?.ip ?: "None"),"Endpoint" to (state.tv?.let { "${if(it.port==8002) "wss" else "ws"}://${it.ip}:${it.port}/api/v2/channels/samsung.remote.control" } ?: "None"),"Authorization/socket state" to state.status.name,"Failure category" to diagnostic.failure.name,"Last error" to diagnostic.lastError,"Last transport submission" to (diagnostic.lastTransmissionMillis?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "None"))
+    val lines=listOf("Wi-Fi network available" to network.toString(),"Local-network permission" to if(permission) "Allowed / not required" else "Required", "Selected TV" to (state.tv?.name ?: "None"),"Local IP" to (state.tv?.ip ?: "None"),"Endpoint" to (state.tv?.let { if(it.platform==TvPlatform.Dlna) it.transport?.controlUrl ?: it.rendering?.controlUrl ?: "None" else "${if(it.port==8002) "wss" else "ws"}://${it.ip}:${it.port}/api/v2/channels/samsung.remote.control" } ?: "None"),"Authorization/socket state" to state.status.label(),"Failure category" to diagnostic.failure.name,"Last error" to diagnostic.lastError,"Last transport submission" to (diagnostic.lastTransmissionMillis?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "None"))
     lines.forEach { (title,value) -> Column(Modifier.fillMaxWidth().padding(vertical=4.dp)) { Text(title,fontWeight=FontWeight.SemiBold);Text(value,fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
     Text("A transport submission is not proof that the TV executed the action.",fontSize=12.sp)
     Button(onClick=vm.connection::reconnect,enabled=permission && state.tv!=null) { Text("Retry connection") }
@@ -115,6 +134,7 @@ import kotlinx.coroutines.*
     OutlinedButton(onClick=vm::reauthorize,enabled=permission && state.tv!=null) { Text("Reauthorize TV") }
     TextButton(onClick=vm::forget,enabled=state.tv!=null) { Text("Forget this device") }
     if(!permission) TextButton(onClick={context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}) { Text("Open Android app permissions") }
+    Text("Export shares a diagnostic file with the recipient you choose. It includes connection state and failure categories, but excludes TV names, addresses, tokens, typed text and media links. Review the recipient before sharing.",fontSize=12.sp)
     OutlinedButton(onClick={scope.launch {
         try {
             val uri=withContext(Dispatchers.IO) {
@@ -136,6 +156,8 @@ import kotlinx.coroutines.*
     Text("Home-screen widgets",style=MaterialTheme.typography.headlineSmall)
     Text("Pair a TV first. Long-press your launcher, choose Widgets, then Smart TV Remote. Each instance has its own saved TV; tap its title to reconfigure. Resize for larger targets.")
     Text("Commands open the app for an authorized live session and explicit Send confirmation. Widget status describes the last attempt, never a continuously monitored connection. No always-running service is used.")
+    WidgetPreview(false)
+    WidgetPreview(true)
     listOf("Compact Remote" to CompactRemoteWidget::class.java,"Advanced Remote" to AdvancedRemoteWidget::class.java).forEach { (name,provider) -> Button(onClick={
         val manager=AppWidgetManager.getInstance(context)
         message=if(manager.isRequestPinAppWidgetSupported && manager.requestPinAppWidget(ComponentName(context,provider),null,null)) "Widget request sent to your launcher." else "Use your launcher's Widgets picker to add this remote."
@@ -165,11 +187,48 @@ private val helpTopics=linkedMapOf(
     Text("Privacy and local data",style=MaterialTheme.typography.headlineSmall)
     Text("TV profiles, preferences and encrypted pairing tokens stay on this device. Typed text is held only for transmission to the selected TV and cleared on backgrounding. No advertising, analytics, account or backend is included. Diagnostics are shared only when you invoke Android's share sheet; exported reports exclude device identity, IPs, tokens and keyboard input.")
     Text("Your TV, Android keyboard and a chosen share destination have their own policies. Unencrypted port-8001 TVs require a trusted local network. The local self-signed certificate exception is explicit and scoped, not a universal security guarantee.")
+    Text("Discovery exchanges local-network requests, TV names, models and addresses. Remote commands and text you send go to the selected TV. Use only devices you own or are authorized to control.")
+    Text("File casting accesses a file you choose and sends it to the selected TV only after an explicit Cast action. DLNA control and file transfers use unencrypted local HTTP. Sharing stops when you stop it, background the app or disconnect. A media URL is sent to the TV, which contacts its host directly; the host may receive the TV's IP address. Avoid private links containing tokens.")
+    Text("Screen Mirror opens Android's native controls. This app does not capture your screen, microphone or camera. The system mirroring service manages consent and transmission. Your screen and notifications may be visible to everyone watching the TV.")
+    Text("Remove a TV in Connected TVs to delete its local credentials and preferences. Reset below deletes all local app data. Also remove the phone in the TV's device settings to revoke authorization held by the TV.")
+    PrivacyContactLinks()
     OutlinedButton(onClick={reset=true}) { Text("Reset all saved data") }
     if(reset) AlertDialog(onDismissRequest={reset=false},title={Text("Reset all local data?")},text={Text("All TV profiles, pairing credentials, widgets' assignments, favorites and preferences will be removed. You will see onboarding again.")},confirmButton={TextButton(onClick={vm.resetDevices();reset=false}) { Text("Reset local data") }},dismissButton={TextButton(onClick={reset=false}) { Text("Cancel") }})
 }
 
 
+
+@Composable internal fun AboutAndDisclaimers() {
+    val context=LocalContext.current
+    val version=runCatching { context.packageManager.getPackageInfo(context.packageName,0).versionName }.getOrNull()
+    Text("Universal TV Remote",style=MaterialTheme.typography.headlineSmall)
+    Text("Version ${version ?: "unavailable"}")
+    Text("Independent application. Not affiliated with, sponsored by or endorsed by Samsung, LG, Xiaomi, Google or any TV manufacturer. Product names and trademarks belong to their respective owners and identify compatibility only.")
+    Text("Compatibility depends on TV model, operating system, region and firmware. A listed brand does not guarantee support. Samsung remote functions and advertised UPnP/DLNA media services have different capabilities. Screen Mirror opens system controls and requires matching phone/TV protocols.")
+    Text("Use only TVs you own or have permission to control. Share only content you are authorized to use. This app does not bypass TV authorization, subscriptions, copyright protection or DRM. Protected media may not mirror or cast.")
+    Text("Use a trusted local network. Some local-media connections are unencrypted. Verify certificate fingerprints before trusting a TV and stop mirroring in system controls when finished.")
+    Text("No advertising, analytics or account is included. Read Privacy and local data in Settings for storage, transmission and deletion details.")
+    PrivacyContactLinks()
+}
+
+@Composable private fun PrivacyContactLinks() {
+    val context=LocalContext.current
+    var message by remember { mutableStateOf("") }
+    Text("Privacy policy: https://indianservers.com/privacy-policy-4")
+    TextButton(onClick={
+        try { context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://indianservers.com/privacy-policy-4"))) }
+        catch(_:android.content.ActivityNotFoundException) { message="No browser is available. Open the privacy-policy address above on another device." }
+        catch(_:SecurityException) { message="Android could not open this link. Use the address above in your browser." }
+    }) { Text("Open privacy policy") }
+    Text("Support and privacy contact: saisatish@indianservers.com")
+    TextButton(onClick={
+        try { context.startActivity(Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saisatish@indianservers.com"))) }
+        catch(_:android.content.ActivityNotFoundException) { message="No email app is available. Contact saisatish@indianservers.com using your preferred email service." }
+        catch(_:SecurityException) { message="Android could not open email. Contact saisatish@indianservers.com directly." }
+    }) { Text("Contact support / privacy") }
+    Text("The policy opens in your browser. Email opens a draft in your email app; nothing is sent automatically.",style=MaterialTheme.typography.bodySmall)
+    if(message.isNotEmpty()) Text(message)
+}
 
 @Composable internal fun CertificateReviewDialog(
     review: com.indianservers.samsungsmarttvremote.data.network.CertificateReview,
@@ -181,13 +240,17 @@ private val helpTopics=linkedMapOf(
             title={Text(if(review.changed) "Security Warning: TV Certificate Changed" else "Verify Your Samsung TV")},
             text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text("Your TV uses a local certificate that Android cannot verify automatically.")
-                Text("${review.tv.name}\nTV IP: ${review.tv.ip}\nVerification: ${review.reason.name}")
+                Text("${review.tv.name}\nTV IP: ${review.tv.ip}")
                 if(review.changed) Text("The saved certificate or endpoint differs. A network impersonator, TV reset or firmware update could cause this. Verify the device before approving a replacement.",color=MaterialTheme.colorScheme.error)
                 Text("Certificate SHA-256 fingerprint",fontWeight=FontWeight.Bold)
-                androidx.compose.foundation.text.selection.SelectionContainer { Text(review.fingerprint,fontSize=12.sp) }
-                Text(if(review.approvable) "Confirm this is your TV on your home network. Trust is saved only for this TV and endpoint; Samsung pairing approval is still required." else "This certificate cannot be approved. Check dates and TV firmware, or reset trust for an endpoint change.")
+                review.previousFingerprint?.let { Text("Previously approved",style=MaterialTheme.typography.labelMedium);Text(it,fontSize=12.sp,fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace) }
+                if(review.changed) Text("New certificate",style=MaterialTheme.typography.labelMedium)
+                androidx.compose.foundation.text.selection.SelectionContainer { Text(review.fingerprint.split(':').chunked(8).joinToString("\n") { it.joinToString(":") },fontSize=12.sp,fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace) }
+                val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
+                TextButton(onClick={clipboard.setText(androidx.compose.ui.text.AnnotatedString(review.fingerprint))}) { Text("Copy fingerprint") }
+                Text(if(review.approvable) "Confirm this TV and network. Certificate trust is saved for this endpoint. Approve Samsung pairing on the TV next." else "This certificate cannot be approved. Check dates and TV firmware, or reset trust for an endpoint change.")
             }},
-            confirmButton={if(review.approvable) TextButton(onClick={onApprove(review)}) { Text("Trust Certificate & Connect") }},
+            confirmButton={if(review.approvable) Button(onClick={onApprove(review)}) { Text("Trust Certificate & Connect") }},
             dismissButton={TextButton(onClick=onCancel) { Text("Cancel") }}
         )
 }

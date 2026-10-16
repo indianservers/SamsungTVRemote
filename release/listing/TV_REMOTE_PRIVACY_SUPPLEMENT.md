@@ -1,0 +1,15 @@
+# Universal TV Remote — proposed privacy-policy supplement
+
+For owner review and publication at https://indianservers.com/privacy-policy-4 alongside the company policy. Use this app-specific section to clarify which general policy practices actually apply; do not publish contradictory blanket statements.
+
+Universal TV Remote (`com.indianservers.samsungsmarttvremote`) operates locally with a compatible TV selected by the user. The app includes no developer analytics, advertising SDK, accounts or automatic upload backend. It does not capture the phone screen, camera or microphone. It does not request broad storage or location access. These statements concern the current app, not the company website or other products.
+
+Local discovery exchanges network requests and TV names, model information and addresses. TV profiles, favorites, preferences, media-service endpoints and widget assignments remain on the phone. Pairing tokens and approved certificate identities are encrypted using Android Keystore. App backup/device transfer is excluded. Remote commands and user-entered text are transmitted to the selected television. Draft keyboard text is cleared when backgrounding or leaving the keyboard.
+
+For media casting, the document picker grants access to a user-selected file. Selection alone does not transmit it. Explicit Cast serves only that file over a temporary local HTTP URL restricted to the selected TV IP. Local-file transfer and DLNA commands are unencrypted; the app therefore does not claim all traffic is encrypted in transit. Stopping sharing, backgrounding, switching TV or disconnecting closes local file sharing. For direct media links, the complete URL is sent to the TV; it contacts the media host, which may receive the TV's IP address. The receiver can continue web playback independently.
+
+Screen Mirror opens the phone's native settings. The system mirroring service owns screen sharing, consent and stopping. Screen content and notifications can be visible on the receiver. The phone/TV services have their own policies.
+
+Diagnostic export occurs only when the user chooses to share through Android. The report includes connection state and failure categories and excludes TV identity/addresses, tokens, raw events, typed text and media URLs. The selected recipient handles the exported material under its own practices. Support email is saisatish@indianservers.com; sending support mail is voluntary and not automatic. The publisher must state its actual retention/deletion practice for received messages and attachments.
+
+Locally saved data remains until the user removes a TV, resets local data or clears/uninstalls the app. Remove a TV in Connected TVs to delete its local credentials/preferences/widget assignments; Privacy → Reset all saved data deletes local profiles and customization. Revoke any authorization stored on the TV in the TV's device settings. Privacy requests may be sent to saisatish@indianservers.com. The publisher must confirm the applicable effective date before publication.

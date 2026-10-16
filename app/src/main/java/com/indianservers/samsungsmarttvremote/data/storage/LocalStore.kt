@@ -51,13 +51,13 @@ class LocalStore(private val context: Context, testStore: androidx.datastore.cor
     val profilesFlow=preferences.data.map { profiles(it) }
     private fun decodeAppearance(data:Preferences): Appearance {
         val j=JSONObject(data[stringPreferencesKey("appearance-v3")] ?: "{}")
-        return Appearance(runCatching { RemoteTheme.valueOf(j.optString("theme","SnowWhite")) }.getOrDefault(RemoteTheme.SnowWhite),j.optDouble("size",1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(1f,1.2f) ?: 1f,j.optDouble("motion",1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(0f,1f) ?: 1f,j.optBoolean("onboarded"),j.optBoolean("mediaFirst"))
+        return Appearance(runCatching { RemoteTheme.valueOf(j.optString("theme","SnowWhite")) }.getOrDefault(RemoteTheme.SnowWhite),j.optDouble("size",1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(1f,1.2f) ?: 1f,j.optDouble("motion",1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(0f,1f) ?: 1f,j.optBoolean("onboarded"),j.optBoolean("mediaFirst"),TvBrands.get(j.optString("brand","Samsung")).name)
     }
     val appearanceFlow=preferences.data.map { decodeAppearance(it) }
     suspend fun appearance(change: (Appearance)->Appearance) {
         preferences.edit {
             val updated=change(decodeAppearance(it))
-            it[stringPreferencesKey("appearance-v3")]=JSONObject().put("theme",updated.theme.name).put("size",updated.buttonSize.toDouble()).put("motion",updated.motion.toDouble()).put("onboarded",updated.onboardingDone).put("mediaFirst",updated.mediaFirst).toString() }
+            it[stringPreferencesKey("appearance-v3")]=JSONObject().put("theme",updated.theme.name).put("size",updated.buttonSize.toDouble()).put("motion",updated.motion.toDouble()).put("onboarded",updated.onboardingDone).put("mediaFirst",updated.mediaFirst).put("brand",updated.brand).toString() }
     }
     override suspend fun save(tv: Tv) { preferences.edit { data ->
         val old=profiles(data); val profile=old.firstOrNull { it.tv.id==tv.id }?.copy(tv=tv) ?: DeviceProfile(tv)

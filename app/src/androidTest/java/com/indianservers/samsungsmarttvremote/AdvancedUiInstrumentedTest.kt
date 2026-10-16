@@ -100,14 +100,17 @@ class AdvancedUiInstrumentedTest {
         compose.onNodeWithText("Try launch").performScrollTo().performClick()
         assertEquals("ed.apps.launch",messages.poll(3,TimeUnit.SECONDS)!!.getJSONObject("params").getString("event"))
         compose.waitUntil(3000) { !vm.advanced.busy.value }
-        compose.onNodeWithText("Sources").performScrollTo().performClick()
-        compose.onNodeWithText("HDMI 1").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Remote panels").performScrollTo().performClick()
+        compose.onNodeWithText("Sources").performClick()
+        compose.onNodeWithText("HDMI 1").assertDoesNotExist()
         compose.onNodeWithText("Open source menu").performScrollTo().performClick()
         assertEquals("KEY_SOURCE",key());screenshot("phase2-sources")
-        compose.onNodeWithText("More").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Remote panels").performScrollTo().performClick()
+        compose.onNodeWithText("More").performClick()
         compose.onNodeWithText("7").performScrollTo().performClick()
         assertEquals("KEY_7",key())
-        compose.onNodeWithText("Favorites").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Remote panels").performScrollTo().performClick()
+        compose.onNodeWithText("Favorites").performClick()
         compose.onNodeWithText("Try Test App").performScrollTo().assertIsDisplayed();screenshot("phase2-favorites")
         compose.runOnIdle { vm.pin(RemoteKey.HOME) }
         compose.waitUntil(2000) { vm.preferences.value.favorites.size==2 }
@@ -117,6 +120,17 @@ class AdvancedUiInstrumentedTest {
         drag.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f,height*1.3f));up() }
         compose.waitUntil(2500) { vm.preferences.value.favorites.firstOrNull()?.key==RemoteKey.HOME }
         assertEquals(1,server.requestCount)
+    }    @Test fun sliderDraggingDoesNotSynthesizeSamsungVolumeOrSeekKeys() {
+        compose.runOnIdle { vm.connection.media.value=MediaSnapshot(volume=21,minimum=1,maximum=65,step=2,position=10,duration=600,canSeek=true,canVolume=true,message="Fixture-reported media") }
+        compose.onNodeWithText("Volume slider, playback & channels").performScrollTo().performClick()
+        val slider=compose.onNodeWithContentDescription("TV-reported volume slider")
+        slider.performScrollTo().performTouchInput { down(center);moveTo(centerRight) }
+        val progress=slider.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo]
+        assertTrue(progress.current>21f)
+        slider.performTouchInput { up() }
+        compose.onNodeWithContentDescription("Playback seek position").performScrollTo().assertIsEnabled()
+        assertNull(messages.poll(250,TimeUnit.MILLISECONDS))
     }
+
 }
 

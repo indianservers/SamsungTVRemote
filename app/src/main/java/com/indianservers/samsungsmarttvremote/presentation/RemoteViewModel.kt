@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.*
 class RemoteViewModel @JvmOverloads constructor(app: Application,private val store: LocalStore=LocalStore(app)): AndroidViewModel(app) {
     private val discovery=TvDiscovery(app)
     val connection=ConnectionManager(viewModelScope,store)
+    val casting=com.indianservers.samsungsmarttvremote.casting.CastingController(app,viewModelScope,connection)
     val advanced=AdvancedController(viewModelScope,connection)
     val preferences=MutableStateFlow(RemotePreferences())
     val devices=MutableStateFlow<List<Tv>>(emptyList())
@@ -74,10 +75,24 @@ class RemoteViewModel @JvmOverloads constructor(app: Application,private val sto
     fun appearance(change: (Appearance)->Appearance) { viewModelScope.launch { try { store.appearance(change) } catch(e: CancellationException) { throw e } catch(_: Exception) { error.value="Unable to save appearance preferences." } } }
     fun completeOnboarding() { appearance { it.copy(onboardingDone=true) } }
     fun connectProfile(profile: DeviceProfile) {
-        restoreJob?.cancel();switchJob?.cancel();rediscoveredFor=null;suspendedTv=null;advanced.cancelSensitiveAction();connection.disconnect()
+        scan?.cancel();restoreJob?.cancel();switchJob?.cancel();rediscoveredFor=null;suspendedTv=null;advanced.cancelSensitiveAction();connection.disconnect()
         switchJob=viewModelScope.launch { try { store.select(profile.tv.id);connection.connect(profile.tv) } catch(e: CancellationException) { throw e } catch(_: Exception) { error.value="Device could not be selected. Rescan and retry." } }
     }
-    fun connectDiscovered(tv: Tv) { restoreJob?.cancel();switchJob?.cancel();rediscoveredFor=null;suspendedTv=null;advanced.cancelSensitiveAction();connection.connect(tv) }
+    fun brand(name: String) { scan?.cancel();devices.value=emptyList();appearance { it.copy(brand=TvBrands.get(name).name) } }
+    fun checkMedia() {
+        val tv=connection.state.value.tv ?: return
+        scan?.cancel();restoreJob?.cancel();switchJob?.cancel()
+        scan=viewModelScope.launch {
+            error.value="Checking advertised media services…"
+            try {
+                val found=discovery.media(tv.ip)
+                if(!foreground || connection.state.value.tv!=tv) return@launch
+                if(found!=null) { error.value="";connection.connect(tv.copy(transport=found.transport,rendering=found.rendering)) }
+                else error.value="No compatible local media services found. Relative Samsung controls remain available."
+            } catch(e:CancellationException) { throw e } catch(_:Exception) { error.value="Media service discovery failed. Check Wi-Fi and local-network permission." }
+        }
+    }
+    fun connectDiscovered(tv: Tv) { scan?.cancel();restoreJob?.cancel();switchJob?.cancel();rediscoveredFor=null;suspendedTv=null;advanced.cancelSensitiveAction();connection.connect(tv) }
     fun rename(id: String,name: String,room: String) { viewModelScope.launch { try { store.rename(id,name,room);com.indianservers.samsungsmarttvremote.widget.WidgetActionHandler.updateAll(getApplication()) } catch(e: CancellationException) { throw e } catch(_: Exception) { error.value="Enter a name (up to 60 characters) and room (up to 40)." } } }
     fun removeProfile(id: String) {
         restoreJob?.cancel();switchJob?.cancel()
@@ -114,9 +129,9 @@ class RemoteViewModel @JvmOverloads constructor(app: Application,private val sto
     fun removeCustom(id: String) { advanced.apps.update { it.filterNot { a -> a.id==id && a.origin==AppOrigin.Custom } }; updatePreferences { it.copy(apps=advanced.apps.value) } }
     fun start() { if(initialized) return; initialized=true; restoreJob=viewModelScope.launch { try { haptics.value=store.haptics(); val saved=store.load(); if(foreground) { saved?.let { connection.connect(it) }; refresh() } else suspendedTv=saved } catch(e: CancellationException) { throw e } catch(_: Exception) { error.value="Unable to restore the saved television." } } }
     fun resume() { foreground=true; suspendedTv?.let { suspendedTv=null; if(connection.state.value.tv==null) connection.connect(it) else connection.reconnect() } }
-    fun pause() { foreground=false; scan?.cancel(); advanced.cancelSensitiveAction(); if(connection.state.value.status in listOf(Status.Connected,Status.Connecting,Status.Reconnecting,Status.AwaitingAuthorization)) { suspendedTv=connection.state.value.tv; connection.disconnect() } }
+    fun pause() { casting.stopSharing();foreground=false; scan?.cancel(); advanced.cancelSensitiveAction(); if(connection.state.value.status in listOf(Status.Connected,Status.Connecting,Status.Reconnecting,Status.AwaitingAuthorization)) { suspendedTv=connection.state.value.tv; connection.disconnect() } }
     fun refresh() { scan?.cancel(); scan=viewModelScope.launch { scanning.value=true; connection.discovering(true); error.value=""; devices.value=emptyList()
-        try { discovery.scan { tv ->
+        try { discovery.scan(appearance.value.brand) { tv ->
             devices.update { SamsungProtocol.merge(it,tv) }
             viewModelScope.launch {
                 val old=connection.state.value.tv
@@ -128,12 +143,12 @@ class RemoteViewModel @JvmOverloads constructor(app: Application,private val sto
     } }
     fun manual(ip: String) { viewModelScope.launch {
         error.value="Checking television…"
-        try { val tv=discovery.validate(ip.trim()); if(tv==null) { connection.unsupportedDevice(); error.value="This device does not advertise a supported Samsung API." } else { devices.update { SamsungProtocol.merge(it,tv) }; error.value="" } }
+        try { val tv=if(appearance.value.brand=="Samsung") discovery.validate(ip.trim()) else discovery.media(ip.trim())?.takeIf { it.brand==appearance.value.brand }; if(tv==null) { connection.unsupportedDevice(); error.value="No compatible services found for this brand and IP. Check the TV model and local-network settings." } else { devices.update { SamsungProtocol.merge(it,tv) }; error.value="" } }
         catch(e: CancellationException) { throw e } catch(_:Exception) { error.value="Unable to validate TV. Enter its private IPv4 address and check Wi-Fi." }
     } }
     fun forget() { connection.state.value.tv?.id?.let(::removeProfile) }
     fun haptics(value:Boolean) { haptics.value=value; viewModelScope.launch { store.haptics(value) } }
-    override fun onCleared() { connectivity.unregisterNetworkCallback(networkCallback); connection.disconnect() }
+    override fun onCleared() { casting.stopSharing(); connectivity.unregisterNetworkCallback(networkCallback); connection.disconnect() }
 }
 
 

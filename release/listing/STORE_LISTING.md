@@ -1,39 +1,37 @@
-# Store listing draft
+# Store listing draft — Universal TV Remote
 
-App name: Smart TV Remote  
-Suggested Play title: Smart TV Remote for Samsung  
-Short description: Control compatible Samsung TVs over Wi-Fi with a refined local remote.
+App name / suggested Play title: Universal TV Remote
+Short description: Samsung remote and compatible local-media TV controls over Wi-Fi.
 
 ## Full description
 
-Bring everyday TV controls to your Android phone with Smart TV Remote, an independent remote for compatible Samsung Smart TVs.
+Control compatible Samsung TVs and supported local-media renderers from your phone. Universal TV Remote works on your local network, without accounts, advertising or analytics.
 
-Connect phone and television to the same reachable local Wi-Fi network, select your TV, and approve the authorization prompt on its screen. Navigate with the directional pad or touchpad, adjust volume and channels, and use Home, Back and media keys.
+Samsung remote features include directional navigation, a touchpad, relative volume, Home/Back, media keys, and model-dependent keyboard and app requests. Certificate approval and Samsung's TV pairing prompt are separate; neither is bypassed.
 
-Personalize your remote:
-- Save multiple TVs with friendly names and rooms.
-- Keep credentials, app favorites and quick actions separate for each TV.
-- Adjust touchpad sensitivity, button size and animation intensity.
-- Choose Snow White, Midnight Dark, Royal Blue, Minimal or system-aware appearance.
-- Send phone-typed text when the television advertises compatible keyboard focus.
-- Request the TV's application list and try supported launch requests.
-- Reorder favorite shortcuts and hide unused groups.
-- Add resizable widgets that open the app for an authorized session and explicit command confirmation.
-- Troubleshoot connections and share a sanitized report only when you choose.
+Choose among 30 TV brands in Settings, including Samsung, LG, Sony, Xiaomi/Mi, TCL and Hisense. The brand selector is not a claim that every model is supported. Other brands currently require compatible advertised UPnP/DLNA media services. Their menu navigation, keyboard and app-launch protocols are not implemented.
 
-The app operates locally, with no account, advertising, analytics service or external control backend. Pairing tokens are stored using Android Keystore-backed encryption.
+On compatible local-media services, use TV-reported volume ranges and playback timelines. Drag to preview, then release to submit a volume or seek request. Sliders stay disabled when the TV does not expose the required capabilities. DLNA seeking does not imply control inside arbitrary streaming applications.
 
-Compatibility varies by model, firmware and the TV application in use. A compatible modern Samsung network remote API is required; not every Samsung TV is supported. Text insertion and app launching depend on the television. Pointer navigation, direct HDMI selection, remote backspace, IR and Wake-on-LAN are not offered as verified features. Use the TV's source menu to choose inputs. Power-off requires a reachable TV; turning on a sleeping or unplugged TV is not guaranteed.
+Save TVs by room/name, switch quickly, search and filter reported Samsung apps, organize favorites, choose white/dark/blue/minimal/system appearance, and preview home-screen widgets. Widgets open the foreground app for connection and explicit send confirmation. Diagnostics explain connection issues and can be shared voluntarily through Android's share sheet.
 
-Some models use self-signed certificates or an explicitly disclosed unencrypted local connection. Use a trusted network and review connection information. Command submission does not guarantee execution on every TV.
+Compatibility varies by exact model, firmware, region and current TV application. Pointer movement, direct HDMI selection, remote text deletion, IR, Wake-on-LAN and universal power-on are not claimed. A successful network request does not prove visible execution.
 
-This independently developed app is not affiliated with or endorsed by Samsung. Samsung and application names belong to their respective owners.
+Samsung tokens and approved certificate identities are encrypted locally with Android Keystore. Discovery and UPnP media control use unencrypted local traffic; secure Samsung pairing is not automatically downgraded. Use a trusted home network.
+
+This independent application is not affiliated with or endorsed by any TV manufacturer. Product and company names belong to their respective owners.
 
 ## Owner details required before publishing
 
-Publisher: [OWNER_LEGAL_NAME]  
-Support email: [OWNER_SUPPORT_EMAIL]  
-Support website: [OWNER_SUPPORT_URL]  
+Publisher: [OWNER_LEGAL_NAME]
+Support email: [OWNER_SUPPORT_EMAIL]
+Support website: [OWNER_SUPPORT_URL]
 Privacy policy: [HOSTED_PRIVACY_POLICY_URL]
 
-Support instructions: open Help first; optionally export sanitized diagnostics and manually choose a support destination. Ask for model/firmware and reproduction steps, never pairing tokens or passwords. Replace placeholders and validate physical-TV claims before submission.
+Validate real-model claims and final signed-build behavior before publishing. Never request pairing tokens or passwords for support. Follow PLAY_CONSOLE_CHECKLIST.md.
+
+## Casting additions (4.1)
+
+Open your phone's system mirroring controls from Cast. Matching phone/TV protocol support is required; this app does not implement its own screen-capture sender. Cast a chosen supported local file or direct media link to compatible UPnP/DLNA renderers advertising media loading. Codec, DRM and receiver restrictions apply. Keep the app open for local-file sharing; no Chromecast SDK, AirPlay or universal Miracast support is claimed.
+
+Disclosures: screen mirroring may expose notifications and private screen content through the phone's system service. Local-file casting uses unencrypted local HTTP and requires the app to remain open. Share only authorized content with a trusted TV. Brand listing does not guarantee model support; no manufacturer affiliation is implied.

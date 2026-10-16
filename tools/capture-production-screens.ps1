@@ -4,7 +4,12 @@ $workspace=Split-Path $PSScriptRoot -Parent
 $screenDir=Join-Path $workspace 'release/screenshots'
 [System.IO.Directory]::CreateDirectory($screenDir) | Out-Null
 function Read-Ui {
-    & $adb -s $Serial shell uiautomator dump /sdcard/smart-remote-ui.xml | Out-Null
+    $dump=''
+    for($probe=0;$probe -lt 3;$probe++) {
+        $dump=(& $adb -s $Serial shell uiautomator dump /sdcard/smart-remote-ui.xml 2>&1 | Out-String)
+        if($dump -match 'dumped to:') { break }
+    }
+    if($dump -notmatch 'dumped to:') { throw 'No current UI hierarchy available; refusing to use a stale capture.' }
     & $adb -s $Serial pull /sdcard/smart-remote-ui.xml (Join-Path $workspace 'qa/production-ui.xml') 2>$null | Out-Null
     [xml]$document=Get-Content (Join-Path $workspace 'qa/production-ui.xml')
     return $document

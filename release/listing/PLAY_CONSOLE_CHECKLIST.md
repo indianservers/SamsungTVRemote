@@ -28,3 +28,6 @@
 - [Data Safety definitions](https://support.google.com/googleplay/android-developer/answer/10787469)
 - [User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
 - [Local-network permission](https://developer.android.com/privacy-and-security/local-network-permission)
+
+## Disclosure revision (16 October 2026)
+See docs/PLAY_POLICY_DISCLOSURES.md. In-app warnings do not waive secure-data handling rules or replace owner contact details, a hosted privacy policy, accurate Data Safety declarations or final Play review. Legacy HTTP/DLNA requires a specific distribution assessment.

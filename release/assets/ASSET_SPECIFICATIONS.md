@@ -12,3 +12,5 @@ Phone captures should show actual app UI, correct supported-feature states and n
 
 References: [Play assets](https://support.google.com/googleplay/android-developer/answer/9866151), [icon specification](https://developer.android.com/distribute/google-play/resources/icon-design-specifications).
 
+
+The universal/ screenshot subdirectory contains the 4.0 production onboarding, empty-device, grouped-settings and brand-selector captures. Older top-level captures show the previous UI. Connected test-server images under qa are fixtures and are not store compatibility evidence.

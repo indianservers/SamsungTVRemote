@@ -139,9 +139,10 @@ import kotlinx.coroutines.*
     val submit: ()->Unit={if(canSend && text.isNotBlank()) { vm.advanced.sendText(text);text="" } }
     SectionTitle("PHONE KEYBOARD")
     if(connectionState.tv?.port==8001) Text("This TV uses an unencrypted local connection. Avoid sensitive text on shared networks.",fontSize=13.sp,color=MaterialTheme.colorScheme.error)
-    Text(if(canSend) "TV keyboard is focused. Type below." else "Open a text field on the TV. Send becomes available when the television advertises remote keyboard focus.",fontSize=14.sp)
-    OutlinedTextField(value=text,onValueChange={if(it.length<=1024) text=it},label={Text("Text for your television")},minLines=3,maxLines=6,modifier=Modifier.fillMaxWidth(),
-        supportingText={Text("${text.toByteArray(Charsets.UTF_8).size}/1,024 UTF-8 bytes • not saved")},
+    Text(if(busy) "Sending to TV…" else if(canSend) "✓ Ready • TV text field selected" else "Select a text field on your TV to enable typing.",fontSize=14.sp)
+    if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+    OutlinedTextField(value=text,onValueChange={if(it.length<=1024) text=it},label={Text("Text for your television")},isError=text.toByteArray(Charsets.UTF_8).size>1024,minLines=3,maxLines=6,modifier=Modifier.fillMaxWidth(),
+        supportingText={Text("${(1024-text.toByteArray(Charsets.UTF_8).size).coerceAtLeast(0)} UTF-8 bytes remaining • not saved")},
         keyboardOptions=KeyboardOptions(autoCorrectEnabled=false,keyboardType=KeyboardType.Text,imeAction=ImeAction.Send),keyboardActions=KeyboardActions(onSend={submit()}))
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         Button(onClick=submit,enabled=canSend && text.isNotBlank() && text.toByteArray(Charsets.UTF_8).size<=1024,modifier=Modifier.heightIn(min=52.dp)) { Text(if(busy) "Sending…" else "Send to TV") }

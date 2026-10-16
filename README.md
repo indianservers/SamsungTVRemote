@@ -1,36 +1,45 @@
-# Smart TV Remote — Phase 3
+# Universal TV Remote
 
-Native Kotlin / Compose Android app, package `com.indianservers.samsungsmarttvremote`. Version 3.0.1 (code 4), minimum API 26, compile/target API 37. Phase 3 adds independent saved TVs, configurable home-screen widgets, five appearance modes, diagnostics/export, onboarding, help and release preparation while preserving the earlier remote features.
+Native Kotlin / Compose Android app, package `com.indianservers.samsungsmarttvremote`. Version 4.1.0 (code 6), minSdk 26, compile/targetSdk 37. The working Samsung pairing/certificate/remote workflow is preserved, with a redesigned interface, 30-brand selector and capability-checked UPnP/DLNA media controls.
 
-## Build
+## Compatibility
+
+- **Samsung:** existing WebSocket remote, D-pad/touchpad, focus-gated text, supported app requests, favorites and widgets. Behavior still depends on model/firmware.
+- **Other brands:** local-media controls only when the selected model actually advertises usable UPnP RenderingControl/AVTransport services. A brand entry does not provide full LG webOS, Android/Google TV, Roku, VIDAA or proprietary menu control.
+- **Sliders:** absolute volume needs an advertised range and actual value; playback seeking needs an actual seekable renderer timeline. No invented current volume, duration or streaming-app seek support.
+
+See the [compatibility matrix](docs/UNIVERSAL_COMPATIBILITY.csv) and [complete UI/protocol report](docs/UNIVERSAL_UI_REPORT.md). Exact non-Samsung model datasheets and physical-TV acceptance remain outstanding; test fixtures do not establish hardware compatibility.
+
+## Use
+
+Choose Settings → TV brands, select a brand and find compatible televisions on the same local network. Saved devices retain their own identities/preferences. Samsung users review the actual certificate fingerprint if required and approve pairing on their TV. The package is unchanged from 3.0.1, so existing pairings and certificate approvals stay in the app.
+
+Use the Remote, Devices, Cast and Settings navigation bar. Core controls are compact; expand Volume slider, playback & channels for media controls. Check media capabilities discovers a same-TV local-media service and reconnects the Samsung remote while retaining its token/certificate policy. Local-media HTTP is unencrypted and separate from the secure Samsung socket. Seek and volume requests are sent on drag completion and then queried back from the TV.
+
+## Build and tests
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 .\gradlew.bat :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug :app:bundleRelease --console=plain
 ```
 
-Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. Optimized bundle: `app/build/outputs/bundle/release/app-release.aab`. The current bundle is **unsigned**; follow [release signing](docs/RELEASE_SIGNING.md) with owner-controlled credentials before upload.
+For a restricted environment that cannot create Kotlin daemon files, add the quoted Gradle argument `'-Pkotlin.compiler.execution.strategy=in-process'`.
 
-## Use
+APK: `app/build/outputs/apk/debug/app-debug.apk`. Release AAB: `app/build/outputs/bundle/release/app-release.aab`. The bundle is unsigned unless the owner supplies [controlled signing credentials](docs/RELEASE_SIGNING.md). Exact final hashes: [artifact manifest](release/ARTIFACTS.json).
 
-The package is now `com.indianservers.samsungsmarttvremote`. Android installs this as a separate app from the previous package; saved TVs, certificate approvals and pairing tokens do not transfer automatically.
+The test suite covers Samsung transport/trust regression, service profile migration, URL/XML defenses, actual local SOAP fixture volume/seek commands, brand/navigation persistence, slider interaction, keyboard/apps/favorites, widgets and lifecycle. Final results are in the [UI report](docs/UNIVERSAL_UI_REPORT.md).
 
-Complete or skip onboarding, allow local-network access when requested, and put phone and TV on the same Wi-Fi. Discover or manually add the TV and accept its authorization request. Devices supports switching, friendly names, rooms and independent removal. Settings contains appearance, widgets, diagnostics, help and privacy controls.
+## Release materials
 
-Each widget maps to one saved TV. Controls open the app for a live authorized connection and explicit send confirmation. TV capabilities remain model-dependent; pointer mode, direct HDMI selection and remote text deletion remain gated pending verification.
+- [Store listing draft](release/listing/STORE_LISTING.md), [privacy draft](release/listing/PRIVACY_POLICY_DRAFT.md), [Play checklist](release/listing/PLAY_CONSOLE_CHECKLIST.md)
+- [Security review](docs/SECURITY_REVIEW.md), [Samsung TLS investigation](docs/TLS_CERTIFICATE_FIX.md)
+- [Artwork provenance](release/assets/ASSET_SPECIFICATIONS.md)
+- Previous phase reports in `docs` describe the historical versions; older release screenshots show the preceding interface.
 
-## Validation and release
+## Screen mirror and casting (4.1)
 
-See the [TLS fix report](docs/TLS_CERTIFICATE_FIX.md) for the latest build and regression results. Earlier Phase 3 validation: 42 JVM tests and 12 Android emulator tests passed. Lint: zero errors, 91 warnings. Debug APK and optimized AAB built successfully. The actual Q60AA certificate review was verified; physical pairing/remote acceptance and signed-release testing remain required.
+Open **Cast → Screen Mirror → Open phone mirroring controls** to choose a receiver in Android's native Cast/Smart View interface. The phone and TV must support the same protocol; the app does not capture the display or implement a Miracast/Google Cast sender.
 
-- [Phase 3 implementation and validation report](docs/PHASE3_REPORT.md)
-- [Security review](docs/SECURITY_REVIEW.md)
-- [Compatibility matrix](docs/SAMSUNG_COMPATIBILITY_MATRIX.csv)
-- [Artifact sizes and SHA-256 hashes](release/ARTIFACTS.json)
-- [Play submission checklist](release/listing/PLAY_CONSOLE_CHECKLIST.md)
-- [Store listing](release/listing/STORE_LISTING.md) and [privacy policy draft](release/listing/PRIVACY_POLICY_DRAFT.md)
-- [Asset specifications](release/assets/ASSET_SPECIFICATIONS.md)
-- [Preserved Phase 2 implementation](docs/PHASE2_IMPLEMENTATION.md)
+For **Media Casting**, connect a TV and check media capabilities. A renderer must advertise SetAVTransportURI and Play. Choose one supported file, then explicitly tap Cast selected file, or send a direct media URL with its correct format. The TV must support the actual container/codecs. Local files are served over a temporary unencrypted HTTP URL restricted to the selected TV IP, with byte-range support. Leaving the app stops file sharing. Stop casting/playback requests DLNA Stop when available. Web streams may continue independently on the receiver.
 
-Production screenshots in `release/screenshots` are genuine emulator captures. Older QA images may show simulated TVs and are not hardware compatibility evidence.
-
+See [casting validation and physical-TV instructions](docs/CASTING_REPORT.md). Debug APK upgrades require the same signing key: the prior 4.0 sandbox build has a different debug certificate from this normal Windows build. Do not uninstall an existing installation merely to bypass this mismatch; that deletes its saved settings.

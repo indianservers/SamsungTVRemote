@@ -9,9 +9,9 @@ enum class RemoteKey(val wire: String? = null) {
     DIGIT_5("KEY_5"), DIGIT_6("KEY_6"), DIGIT_7("KEY_7"), DIGIT_8("KEY_8"), DIGIT_9("KEY_9");
     val code get() = wire ?: "KEY_$name"
 }
-data class Tv(val id: String, val name: String, val ip: String, val model: String = "Samsung TV", val port: Int = 8002)
+data class Tv(val id: String, val name: String, val ip: String, val model: String = "Samsung TV", val port: Int = 8002,val platform: TvPlatform=TvPlatform.Samsung,val brand: String="Samsung",val transport: MediaService?=null,val rendering: MediaService?=null)
 enum class Status { Disconnected, Discovering, Connecting, AwaitingAuthorization, Connected, Reconnecting, Failed, Unsupported }
-data class RemoteState(val status: Status = Status.Disconnected, val tv: Tv? = null, val message: String = "Connect your Samsung TV")
+data class RemoteState(val status: Status = Status.Disconnected, val tv: Tv? = null, val message: String = "Connect your television")
 interface RemoteProtocol { fun command(key: RemoteKey): String }
 object SamsungProtocol : RemoteProtocol {
     override fun command(key: RemoteKey) = JSONObject().put("method", "ms.remote.control").put("params", JSONObject()

@@ -32,20 +32,27 @@ import com.indianservers.samsungsmarttvremote.domain.*
     val prefs by vm.preferences.collectAsStateWithLifecycle()
     val caps by vm.advanced.capabilities.state.collectAsStateWithLifecycle()
     var add by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("All") }
     SectionTitle("TV APPLICATIONS")
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         Button(onClick=vm.advanced::refreshApps,enabled=connected && !busy,modifier=Modifier.heightIn(min=52.dp)) { Text(if(busy) "Working…" else "Refresh apps") }
         OutlinedButton(onClick={add=true},modifier=Modifier.heightIn(min=52.dp)) { Text("Add shortcut") }
     }
+    OutlinedTextField(value=search,onValueChange={search=it},label={Text("Search TV apps")},singleLine=true,modifier=Modifier.fillMaxWidth())
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        listOf("All","Installed","Cached","Custom","Favorites").forEach { name -> FilterChip(selected=filter==name,onClick={filter=name},label={Text(name)}) }
+    }
+    val visible=apps.filter { app -> app.name.contains(search,true) && when(filter) { "Installed"->app.origin==AppOrigin.Installed;"Cached"->app.origin==AppOrigin.Cached;"Custom"->app.origin==AppOrigin.Custom;"Favorites"->prefs.favorites.any { it.appId==app.id };else->true } }
+    if(apps.isNotEmpty() && visible.isEmpty()) Text("No apps match this search or filter.")
     if(apps.isEmpty()) {
         Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Your TV's apps, in one place",fontSize=20.sp,fontWeight=FontWeight.Bold)
             Text("Refresh to request installed apps. No installed applications have been reported yet.",fontSize=14.sp)
-            Text("YouTube · Netflix · Prime Video · Disney+ · Samsung TV Plus · Internet Browser",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Availability and IDs vary by model and region. Custom shortcuts require your TV-specific app identifier.",fontSize=13.sp)
         } }
     }
-    apps.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+    visible.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         row.forEach { app ->
             val favorite=prefs.favorites.any { it.appId==app.id }
             val tint by animateColorAsState(if(favorite) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,animationSpec=com.indianservers.samsungsmarttvremote.ui.theme.remoteTween(),label="app favorite")
@@ -58,6 +65,8 @@ import com.indianservers.samsungsmarttvremote.domain.*
                     Text(app.name,fontWeight=FontWeight.Bold,fontSize=16.sp)
                     Text(when(app.origin) { AppOrigin.Installed->"Reported by this TV";AppOrigin.Cached->"Cached • unverified now";AppOrigin.Custom->"Custom • unverified" },fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick={vm.advanced.launch(app)},enabled=connected && !busy && app.actionType!="UNKNOWN" && caps[Feature.AppLaunching].support!=Support.Unsupported,contentPadding=PaddingValues(10.dp),modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text(if(app.actionType=="UNKNOWN") "Unverified type" else "Try launch",fontSize=13.sp) }
+                    if(!connected) Text("Connect this TV to launch",style=MaterialTheme.typography.bodySmall)
+                    else if(app.actionType=="UNKNOWN") Text("This app type has no verified launch action",style=MaterialTheme.typography.bodySmall)
                     if(app.origin==AppOrigin.Custom) TextButton(onClick={vm.removeCustom(app.id)}) { Text("Remove",fontSize=12.sp) }
                 }
             }

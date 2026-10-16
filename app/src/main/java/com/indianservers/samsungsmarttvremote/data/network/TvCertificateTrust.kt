@@ -14,7 +14,7 @@ data class TvCertificatePin(val deviceId: String,val ip: String,val port: Int,va
     fun matches(tv: Tv,leaf: X509Certificate)=deviceId==tv.id && ip==tv.ip && port==tv.port && fingerprint==TvCertificateTrust.fingerprint(leaf)
 }
 enum class TlsFailure { UntrustedChain, HostnameMismatch, Expired, NotYetValid, CertificateChanged, DeviceMismatch, Handshake, WebSocket }
-data class CertificateReview(val tv: Tv,val fingerprint: String,val reason: TlsFailure,val changed: Boolean,val approvable: Boolean)
+data class CertificateReview(val tv: Tv,val fingerprint: String,val reason: TlsFailure,val changed: Boolean,val approvable: Boolean,val previousFingerprint: String?=null)
 class PinFailure(val reason: TlsFailure): CertificateException(reason.name)
 
 /** Observes a failed standard verification without ever accepting an unapproved certificate. */
@@ -55,7 +55,7 @@ class TvCertificateTrust(private val tv: Tv,private val approved: TvCertificateP
         val reason=classify(error)
         if(reason==TlsFailure.Handshake || reason==TlsFailure.WebSocket) return null
         val valid=runCatching { leaf.checkValidity() }.isSuccess
-        return CertificateReview(tv,fingerprint(leaf),reason,approved!=null && !approved.matches(tv,leaf),valid && reason!=TlsFailure.DeviceMismatch)
+        return CertificateReview(tv,fingerprint(leaf),reason,approved!=null && !approved.matches(tv,leaf),valid && reason!=TlsFailure.DeviceMismatch,approved?.fingerprint)
     }
     fun classify(error: Throwable): TlsFailure {
         val causes=generateSequence(error) { it.cause }.take(12).toList()

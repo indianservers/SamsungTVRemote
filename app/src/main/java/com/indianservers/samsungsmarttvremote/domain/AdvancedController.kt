@@ -46,6 +46,7 @@ class AdvancedController(private val scope: CoroutineScope,private val connectio
         }
     }
     private fun runAction(block: suspend ()->Unit) {
+        if(connection.state.value.tv?.platform==TvPlatform.Dlna) { notice.value="This feature needs a menu-control adapter for the selected TV.";return }
         if(current?.isActive==true) { notice.value="Wait for the current TV request."; return }
         current=scope.launch {
             operation.withLock {

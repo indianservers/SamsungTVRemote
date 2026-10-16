@@ -10,12 +10,72 @@ import kotlinx.coroutines.flow.*
 import okhttp3.*
 import java.util.concurrent.TimeUnit
 import com.indianservers.samsungsmarttvremote.data.protocol.SamsungAppProtocol
+import com.indianservers.samsungsmarttvremote.data.protocol.LocalMediaSession
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class ConnectionManager(private val scope: CoroutineScope, private val store: PairingStore) {
     private val mutable=MutableStateFlow(RemoteState())
     val state=mutable.asStateFlow()
     val diagnostics=MutableStateFlow(ConnectionDiagnostics())
     fun reportError(kind: FailureKind,message: String) { diagnostics.update { it.copy(failure=kind,lastError=message) } }
+    val media=MutableStateFlow(MediaSnapshot())
+    private var localMedia: LocalMediaSession?=null
+    private val mediaLock=Mutex()
+    private fun mediaAction(action: suspend (LocalMediaSession)->Unit) {
+        val version=generation;val target=localMedia ?: return
+        if(state.value.status!=Status.Connected || media.value.busy) return
+        media.update { it.copy(busy=true) }
+        scope.launch {
+            mediaLock.withLock {
+                try {
+                    if(version!=generation || target!==localMedia) return@withLock
+                    action(target)
+                    val result=target.refresh()
+                    if(version==generation) media.value=result
+                } catch(e: CancellationException) { throw e } catch(_:Exception) {
+                    if(version==generation) media.update { it.copy(busy=false,message="TV did not confirm the media action. Refresh and try again.") }
+                }
+            }
+        }
+    }
+    suspend fun castMedia(tvId: String,url: String,mime: String): Submission {
+        val version=generation;val target=localMedia ?: return Submission(false,"Check media capabilities first.")
+        return mediaLock.withLock {
+            if(version!=generation || selected?.id!=tvId || state.value.status!=Status.Connected) return@withLock Submission(false,"TV connection changed. Nothing was cast.")
+            try {
+                target.loadMedia(url,mime)
+                runCatching { target.refresh() }.getOrNull()?.let { if(version==generation) media.value=it }
+                Submission(true,"TV accepted the media request. Check its screen; codec/playback is not guaranteed.")
+            } catch(e:CancellationException) { throw e } catch(_:Exception) { Submission(false,"TV did not accept the complete playback request. Check its media support and screen.") }
+        }
+    }
+    suspend fun stopCastMedia(tvId: String): Submission {
+        val version=generation;val target=localMedia ?: return Submission(false,"No active local-media session.")
+        return mediaLock.withLock {
+            if(version!=generation || selected?.id!=tvId || state.value.status!=Status.Connected) return@withLock Submission(false,"TV connection changed; stop was not sent.")
+            try { target.key(RemoteKey.STOP);Submission(true,"Stop request accepted by the TV. Check its screen.") }
+            catch(e:CancellationException) { throw e } catch(_:Exception) { Submission(false,"TV did not accept Stop. Use its own remote if playback continues.") }
+        }
+    }
+    fun setVolume(value: Int) { if(media.value.canVolume) mediaAction { it.volume(value) } }
+    fun seekTo(seconds: Long) { val track=media.value.track;if(media.value.canSeek) mediaAction { target -> val current=target.refresh();require(current.track==track) { "Media changed" };target.seek(seconds) } }
+    fun refreshMedia() { mediaAction { } }
+    private suspend fun observeMedia(tv: Tv,version: Int) {
+        val target=LocalMediaSession(tv);localMedia=target
+        try {
+            mediaLock.withLock { val result=target.inspect();if(version==generation) media.value=result }
+            if(tv.platform==TvPlatform.Dlna && version==generation) unsupported.value=RemoteKey.entries.filterNot(target::supports).toSet()
+            while(currentCoroutineContext().isActive && version==generation) {
+                delay(3000)
+                mediaLock.withLock {
+                    try { val result=target.refresh();if(version==generation) { media.value=result;if(tv.platform==TvPlatform.Dlna) unsupported.value=RemoteKey.entries.filterNot(target::supports).toSet() } }
+                    catch(e:CancellationException) { throw e }
+                    catch(_:Exception) { if(version==generation) { media.value=MediaSnapshot(message="Local media unavailable. Refresh or reconnect.");if(tv.platform==TvPlatform.Dlna) unsupported.value=RemoteKey.entries.toSet() } }
+                }
+            }
+        } finally { target.close();if(target===localMedia) localMedia=null }
+    }
     private var socket: WebSocket?=null
     private var session: Job?=null
     @Volatile private var generation=0
@@ -60,6 +120,18 @@ class ConnectionManager(private val scope: CoroutineScope, private val store: Pa
             for(message in command.messages) {
                 if(command.result.isCancelled || command.version!=generation || mutable.value.status!=Status.Connected || !command.guard() || command.key in unsupported.value) { sent=false; break }
                 lastKey=command.key; lastFeature=command.feature
+                if(selected?.platform==TvPlatform.Dlna) {
+                    try {
+                        val target=localMedia ?: error("No media session")
+                        mediaLock.withLock {
+                            if(command.version!=generation || !command.guard()) error("Device changed")
+                            target.key(command.key ?: error("This feature requires a menu remote"))
+                            val result=target.refresh();if(command.version==generation) media.value=result
+                        }
+                    } catch(e:CancellationException) { throw e } catch(_:Exception) { sent=false }
+                    if(sent && command.version==generation) diagnostics.update { it.copy(lastTransmissionMillis=System.currentTimeMillis()) }
+                    delay(120);continue
+                }
                 if(socket?.send(message)!=true) {
                     sent=false
                     reportError(FailureKind.Unreachable,"Command transport unavailable")
@@ -74,7 +146,7 @@ class ConnectionManager(private val scope: CoroutineScope, private val store: Pa
     } }
     private fun enqueue(messages: List<String>,feature: Feature?,key: RemoteKey?,guard: ()->Boolean): CompletableDeferred<Submission> {
         val result=CompletableDeferred<Submission>()
-        if(key in unsupported.value || state.value.status!=Status.Connected || !guard() || commands.trySend(Outbound(generation,messages,key,feature,guard,result)).isFailure) {
+        if(selected?.platform==TvPlatform.Dlna && key==null || key in unsupported.value || state.value.status!=Status.Connected || !guard() || commands.trySend(Outbound(generation,messages,key,feature,guard,result)).isFailure) {
             val message="Command not sent. Check connection or slow down."
             mutable.value=mutable.value.copy(message=message); result.complete(Submission(false,message))
         }
@@ -99,7 +171,7 @@ class ConnectionManager(private val scope: CoroutineScope, private val store: Pa
         return try { pending.await() } finally { if(!pending.isCompleted) pending.cancel() }
     }
     fun disconnect() {
-        certificateReview.value=null; desired=false; generation++; session?.cancel(); session=null; socket?.cancel(); socket=null
+        localMedia?.close();localMedia=null;media.value=MediaSnapshot();certificateReview.value=null; desired=false; generation++; session?.cancel(); session=null; socket?.cancel(); socket=null
         while(true) { val queued=commands.tryReceive().getOrNull() ?: break; queued.result.complete(Submission(false,"Connection changed before transmission.")) }
         lastKey=null; lastFeature=null; mutable.value=RemoteState(tv=selected,message="Disconnected")
     }
@@ -114,6 +186,24 @@ class ConnectionManager(private val scope: CoroutineScope, private val store: Pa
         disconnect(); selected=tv; desired=true; tlsFailure.value=null
         if(changed) { unsupported.value=emptySet();diagnostics.value=ConnectionDiagnostics() }
         val version=generation
+        if(tv.platform==TvPlatform.Dlna) {
+            if(!LocalMediaPolicy.valid(tv)) { mutable.value=RemoteState(Status.Unsupported,tv,"Invalid local media endpoint");return }
+            unsupported.value=RemoteKey.entries.toSet()
+            session=scope.launch {
+                mutable.value=RemoteState(Status.Connecting,tv,"Checking advertised local media services…")
+                val probe=LocalMediaSession(tv)
+                try {
+                    val verified=probe.inspect()
+                    if(version!=generation) return@launch
+                    store.save(tv);media.value=verified
+                    mutable.value=RemoteState(Status.Connected,tv,"Local media ready • menu navigation is unavailable")
+                    observeMedia(tv,version)
+                } catch(e:CancellationException) { throw e } catch(_:Exception) {
+                    if(version==generation) { reportError(FailureKind.Protocol,"Local media query failed");mutable.value=RemoteState(Status.Failed,tv,"TV did not expose usable media services. Check its local-network controls.") }
+                } finally { probe.close() }
+            }
+            return
+        }
         session=scope.launch {
             val owner=coroutineContext[Job]!!
             for (attempt in 0..4) {
@@ -150,7 +240,10 @@ class ConnectionManager(private val scope: CoroutineScope, private val store: Pa
                                 if(version!=generation || !alive.get() || ended.isCompleted) return@launch
                                 try {
                                     event.second?.let { store.token(tv.id,it) }; store.save(tv)
-                                    if(version==generation && alive.get() && !ended.isCompleted) { mutable.value=RemoteState(Status.Connected,tv,"Connected to ${tv.name}"); authorized.complete(Unit) }
+                                    if(version==generation && alive.get() && !ended.isCompleted) {
+                                        mutable.value=RemoteState(Status.Connected,tv,"Connected to ${tv.name}"); authorized.complete(Unit)
+                                        if(localMedia==null && (tv.transport!=null || tv.rendering!=null)) launch { try { observeMedia(tv,version) } catch(e:CancellationException) { throw e } catch(_:Exception) { if(version==generation) media.value=MediaSnapshot(message="This TV did not expose usable media sliders") } }
+                                    }
                                 } catch (e: CancellationException) { throw e } catch (_: Exception) { if(version==generation && alive.get() && !ended.isCompleted) { mutable.value=RemoteState(Status.Connected,tv,"Connected, but pairing could not be saved."); authorized.complete(Unit) } }
                             }
                             "ms.channel.unauthorized", "ms.channel.timeOut" -> {

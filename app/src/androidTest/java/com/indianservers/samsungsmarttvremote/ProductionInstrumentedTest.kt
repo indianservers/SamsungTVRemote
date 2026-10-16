@@ -122,10 +122,53 @@ class ProductionUiInstrumentedTest {
         vm=ViewModelProvider(models,factory)[RemoteViewModel::class.java]
     }
     @After fun cleanup() { InstrumentationRegistry.getInstrumentation().runOnMainSync { models.clear() };scope.cancel() }
+    @Test fun brandSelectionPersistsAndKeepsSamsungProfiles() {
+        runBlocking { store.save(Tv("saved-samsung","Living room","192.168.1.8")) }
+        compose.setContent { SamsungSmartTVRemoveTheme { Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { BrandSettings(vm,{}) } } }
+        compose.onNodeWithText("Search 30 brands").performTextInput("Xiaomi")
+        compose.onNodeWithText("Xiaomi / Mi").performScrollTo().performClick()
+        compose.waitUntil(2000) { vm.appearance.value.brand=="Xiaomi / Mi" }
+        assertEquals("Xiaomi / Mi",runBlocking { store.appearanceFlow.first().brand })
+        assertEquals("saved-samsung",runBlocking { store.profilesFlow.first().single().tv.id })
+        compose.onNodeWithText("Find Xiaomi / Mi TVs").assertExists()
+    }
+    @Test fun persistentNavigationOpensSettingsAndBrandSelector() {
+        runBlocking { store.appearance { it.copy(onboardingDone=true) } }
+        compose.setContent { RemoteApp(vm) }
+        compose.waitUntil(3000) { vm.settingsReady.value }
+        compose.onNodeWithContentDescription("Open Settings").performClick()
+        compose.onNodeWithText("TV brands").performScrollTo().performClick()
+        compose.onNodeWithText("Search 30 brands").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open Devices").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Your televisions").assertIsDisplayed()
+    }
+    @Test fun mirroringIsSystemManagedAndCastingRequiresCompatibleReceiver() {
+        compose.setContent { SamsungSmartTVRemoveTheme { Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { CastingScreen(vm,{}) } } }
+        compose.onNodeWithText("Open phone mirroring controls").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Media Casting").performScrollTo().performClick()
+        compose.onNodeWithText("Connect a television").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Direct media URL").performScrollTo().performTextInput("https://example.com/movie.mp4")
+        compose.onNodeWithText("Cast this URL").performScrollTo().assertIsNotEnabled()
+        assertFalse(vm.casting.state.value.sharing)
+    }
+    @Test fun documentSelectionDoesNotAutomaticallyStartSharing() {
+        val app=InstrumentationRegistry.getInstrumentation().targetContext
+        val folder=File(app.cacheDir,"diagnostics").apply { mkdirs() }
+        val file=File(folder,"cast-fixture.mp4").apply { writeBytes(byteArrayOf(0,1,2,3)) }
+        try {
+            val uri=androidx.core.content.FileProvider.getUriForFile(app,"${app.packageName}.files",file)
+            compose.runOnIdle { vm.casting.selectFile(uri) }
+            compose.waitUntil(3000) { !vm.casting.state.value.busy && vm.casting.state.value.file!=null }
+            assertEquals(4L,vm.casting.state.value.file!!.bytes)
+            assertFalse(vm.casting.state.value.sharing)
+            compose.runOnIdle { vm.casting.clearFile() }
+            assertNull(vm.casting.state.value.file)
+        } finally { file.delete() }
+    }
     @Test fun firstLaunchOnboardingCompletesAndPersists() {
         compose.setContent { RemoteApp(vm) }
         compose.waitUntil(3000) { vm.settingsReady.value }
-        compose.onNodeWithText("Control Your Samsung TV").assertIsDisplayed()
+        compose.onNodeWithText("Control Your TV").assertIsDisplayed()
         repeat(3) { compose.onNodeWithText("Continue").performScrollTo().performClick() }
         compose.onNodeWithText("Start controlling").performScrollTo().performClick()
         compose.waitUntil(2000) { vm.appearance.value.onboardingDone }
@@ -216,7 +259,7 @@ class CertificateUiInstrumentedTest {
         var approved=false
         compose.setContent { SamsungSmartTVRemoveTheme { CertificateReviewDialog(review,{ approved=true },{}) } }
         compose.onNodeWithText("Verify Your Samsung TV").assertIsDisplayed()
-        compose.onNodeWithText(fingerprint).assertExists()
+        compose.onNodeWithText(fingerprint.split(':').chunked(8).joinToString("\n") { it.joinToString(":") }).assertExists()
         compose.onNodeWithText("Trust Certificate & Connect").performClick()
         compose.runOnIdle { assertTrue(approved) }
     }

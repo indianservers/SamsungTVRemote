@@ -19,6 +19,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -64,6 +68,7 @@ internal val Cobalt: Color @Composable get()=MaterialTheme.colorScheme.primary
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val ready by vm.settingsReady.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
+    val wifiAvailable by vm.wifiAvailable.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val haptics by vm.haptics.collectAsStateWithLifecycle()
     val unsupported by vm.connection.unsupported.collectAsStateWithLifecycle()
@@ -71,6 +76,7 @@ internal val Cobalt: Color @Composable get()=MaterialTheme.colorScheme.primary
     var manual by rememberSaveable { mutableStateOf("") }
     val certificateReview by vm.connection.certificateReview.collectAsStateWithLifecycle()
     var resetCertificate by remember { mutableStateOf(false) }
+    var quickTv by remember { mutableStateOf(false) }
     val context=androidx.compose.ui.platform.LocalContext.current
     val scope=rememberCoroutineScope()
     var pendingWidget by remember { mutableStateOf<Triple<WidgetConfig,RemoteKey,DeviceProfile>?>(null) }
@@ -105,9 +111,23 @@ internal val Cobalt: Color @Composable get()=MaterialTheme.colorScheme.primary
     val feedback=LocalHapticFeedback.current
     val send:(RemoteKey)->Unit={if(haptics) feedback.performHapticFeedback(HapticFeedbackType.LongPress);vm.connection.send(it)}
     SamsungSmartTVRemoveTheme(appearance) {
-        Scaffold(containerColor=MaterialTheme.colorScheme.background) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(if(appearance.theme==RemoteTheme.Minimal) 12.dp else 24.dp),verticalArrangement=Arrangement.spacedBy(if(appearance.theme==RemoteTheme.Minimal) 10.dp else 18.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                if(appearance.theme!=RemoteTheme.Minimal) Text("◉  SMART TV REMOTE",fontSize=13.sp,letterSpacing=3.sp,color=Cobalt,fontWeight=FontWeight.Bold)
+        Scaffold(containerColor=MaterialTheme.colorScheme.background,
+            topBar={if(ready && appearance.onboardingDone) Surface(tonalElevation=1.dp) {
+                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal=16.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
+                    if(screen !in setOf("devices","remote","settings")) TextButton(onClick={screen=if(state.tv==null) "devices" else "remote"}) { Text("‹ Back") }
+                    Column(Modifier.weight(1f)) { Text(profiles.firstOrNull { it.tv.id==state.tv?.id }?.friendlyName ?: "Universal TV Remote",fontWeight=FontWeight.Bold,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis);Text(state.tv?.let { "${it.brand} • ${state.status.label()}" } ?: "Choose your television",style=MaterialTheme.typography.bodySmall) }
+                    TextButton(onClick={quickTv=true}) { Text("Switch TV") }
+                    if(screen=="remote") RemoteButton("Power off",RemoteKey.POWER,state.status==Status.Connected && RemoteKey.POWER !in unsupported,send,compact=true)
+                }
+            }},
+            bottomBar={if(ready && appearance.onboardingDone) NavigationBar {
+                listOf(Triple("Remote","remote",RemoteKey.ENTER),Triple("Devices","devices",RemoteKey.SOURCE),Triple("Cast","cast",RemoteKey.PLAY),Triple("Settings","settings",RemoteKey.MENU)).forEach { (label,destination,icon) ->
+                    NavigationBarItem(modifier=Modifier.semantics { contentDescription="Open $label" },selected=screen==destination,onClick={screen=destination},icon={RemoteGlyph(icon,LocalContentColor.current)},label={Text(label)})
+                }
+            }}
+        ) { padding ->
+            Column(Modifier.fillMaxSize().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max=760.dp).padding(padding).verticalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+
                 if(!ready) CircularProgressIndicator()
                 else if(!appearance.onboardingDone) Onboarding(vm::completeOnboarding)
                 else {
@@ -125,59 +145,77 @@ internal val Cobalt: Color @Composable get()=MaterialTheme.colorScheme.primary
                         TextButton(onClick={pendingWidget=null}) { Text("Cancel widget action") }
                     } } }
                     if(widgetMessage.isNotEmpty()) Text(widgetMessage,fontSize=13.sp)
-                    if(screen!="remote") Row { TextButton(onClick={screen="devices"}) { Text("Connected TVs") };TextButton(onClick={screen="settings"}) { Text("Settings") } }
+                    ConnectionBanner(vm,onPermission={context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:${context.packageName}")))},onDiagnostics={screen="diagnostics"})
                     when(screen) {
                         "devices" -> DeviceDashboard(vm,onDiscover={screen="find"},onRemote={screen="remote"},onDiagnostics={screen="diagnostics"})
                         "find" -> {
-                            Text("Connect Your\nSamsung TV",fontSize=32.sp,lineHeight=38.sp,fontWeight=FontWeight.Bold)
+                            Text("Find your ${appearance.brand} TV",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                            TextButton(onClick={screen="brands"}) { Text("Change TV brand") }
                             Text("Connect your phone and TV to the same Wi-Fi network.")
                             if(!permission) {
                                 Text("Local network permission is required.")
                                 Button(onClick={if(LocalNetworkPermission.required(Build.VERSION.SDK_INT,context.applicationInfo.targetSdkVersion)) launcher.launch(LocalNetworkPermission.NAME)}) { Text("Allow local network") }
                                 TextButton(onClick={context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:${context.packageName}")))}) { Text("Open app permissions") }
                             } else {
+                                if(!wifiAvailable) {
+                                    Text("Wi-Fi is unavailable",fontWeight=FontWeight.Bold)
+                                    Text("Connect your phone to the TV’s local network before scanning.",style=MaterialTheme.typography.bodySmall)
+                                    TextButton(onClick={context.startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))}) { Text("Open Wi-Fi settings") }
+                                }
                                 if(scanning) { LinearProgressIndicator(Modifier.fillMaxWidth());Text("Searching your network…") }
-                                TextButton(onClick=vm::refresh) { Text("Rescan televisions") }
-                                if(devices.isEmpty() && !scanning) Text("No Samsung TVs found. Enter a private TV IP or try again.")
+                                TextButton(onClick=vm::refresh,enabled=!scanning) { Text("Rescan televisions") }
+                                if(devices.isEmpty() && !scanning) { Text("No compatible ${appearance.brand} TVs found",fontWeight=FontWeight.Bold);Text("Check the same Wi-Fi, TV network-control settings and selected brand. You can also enter its private IP.",style=MaterialTheme.typography.bodySmall) }
                                 devices.forEach { tv -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                     Text(tv.name,fontWeight=FontWeight.Bold);Text("${tv.model} • ${tv.ip}")
+                                    Text(if(tv.platform==TvPlatform.Dlna) "Local media only • no menu navigation • unencrypted" else "Samsung remote",style=MaterialTheme.typography.bodySmall)
                                     if(tv.port==8001) Text("Unencrypted port 8001. Use only on a trusted network.",fontSize=12.sp)
                                     Button(onClick={vm.connectDiscovered(tv)}) { Text("Connect") }
                                 } } }
-                                OutlinedTextField(value=manual,onValueChange={manual=it},label={Text("TV IP address")},singleLine=true,modifier=Modifier.fillMaxWidth())
-                                OutlinedButton(onClick={vm.manual(manual)}) { Text("Find TV by IP") }
+                                OutlinedTextField(value=manual,onValueChange={manual=it},label={Text("TV IP address")},singleLine=true,isError=manual.isNotBlank() && !SamsungProtocol.localIp(manual.trim()),supportingText={Text(if(manual.isNotBlank() && !SamsungProtocol.localIp(manual.trim())) "Use a private IPv4 address, for example 192.168.1.20" else "Find this under the TV’s network settings")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal,imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={if(SamsungProtocol.localIp(manual.trim())) vm.manual(manual)}),modifier=Modifier.fillMaxWidth())
+                                OutlinedButton(onClick={vm.manual(manual)},enabled=SamsungProtocol.localIp(manual.trim()) && !error.startsWith("Checking")) { Text(if(error.startsWith("Checking")) "Checking TV…" else "Find TV by IP") }
                             }
                             TextButton(onClick={screen="devices"}) { Text("Saved televisions") }
                         }
                         "settings" -> {
                             Text("Settings",style=MaterialTheme.typography.headlineLarge)
-                            listOf("Connected TVs" to "devices","Remote Preferences" to "preferences","Themes and Appearance" to "appearance","Widgets" to "widgets","Connection Diagnostics" to "diagnostics","Help" to "help","Privacy" to "privacy","About" to "about").forEach { (title,destination) -> OutlinedButton(onClick={screen=destination},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text(title) } }
-                            if(state.tv?.port==8002) OutlinedButton(onClick={resetCertificate=true}) { Text("Reset TV Certificate Trust") }
+                            Text("Connection",color=Cobalt,fontWeight=FontWeight.Bold)
+                            SettingsRow("Connected TVs","Manage rooms, names and saved televisions",RemoteKey.SOURCE) {screen="devices"}
+                            SettingsRow("Screen Mirror & Casting","Mirror controls, files and direct media links",RemoteKey.PLAY) {screen="cast"}
+                            SettingsRow("TV brands","${appearance.brand} • ${TvBrands.all.size} brand choices",RemoteKey.SOURCE) {screen="brands"}
+                            SettingsRow("Connection Diagnostics","Status, recovery and certificate details") {screen="diagnostics"}
+                            Text("Personalize",color=Cobalt,fontWeight=FontWeight.Bold)
+                            SettingsRow("Remote Preferences","Default tab and control groups") {screen="preferences"}
+                            SettingsRow("Themes and Appearance","Colors, size, animation and haptics") {screen="appearance"}
+                            SettingsRow("Widgets","Preview and add home-screen controls") {screen="widgets"}
+                            Text("Support & privacy",color=Cobalt,fontWeight=FontWeight.Bold)
+                            SettingsRow("Help","Troubleshooting and model limitations") {screen="help"}
+                            SettingsRow("Privacy","Local storage and data reset") {screen="privacy"}
+                            SettingsRow("About","Version and independent-app information") {screen="about"}
+                            if(state.tv?.platform==TvPlatform.Samsung && state.tv?.port==8002) OutlinedButton(onClick={resetCertificate=true}) { Text("Reset TV Certificate Trust") }
                             OutlinedButton(onClick=vm.connection::disconnect) { Text("Disconnect") }
                         }
                         "preferences" -> if(state.tv!=null) CustomizationSettings(vm) else Text("Select a saved television to customize its remote preferences.")
+                        "cast" -> CastingScreen(vm,onDevices={screen="devices"})
+                        "brands" -> BrandSettings(vm,onDiscover={screen="find";if(permission) vm.refresh()})
                         "appearance" -> AppearanceSettings(vm)
                         "diagnostics" -> DiagnosticsScreen(vm,permission,onRescan={screen="find";if(permission) vm.refresh()},onHelp={screen="help"})
                         "help" -> HelpCenter()
                         "privacy" -> PrivacyScreen(vm)
                         "widgets" -> WidgetSettings()
-                        "about" -> { Text("Smart TV Remote",style=MaterialTheme.typography.headlineLarge);Text("Version 3.0.1 • Independent Samsung-compatible remote. Not affiliated with or endorsed by Samsung. Compatibility depends on model and firmware.\nLocal operation; no account, advertising or analytics.\nRelease preparation build: hardware and Play review remain required.") }
-                        else -> ConnectedRemote(vm,send,onChangeTv={screen="devices"},onSettings={screen="settings"})
+                        "about" -> AboutAndDisclaimers()
+                        else -> ConnectedRemote(vm,send,onChangeTv={screen="devices"},onSettings={screen="settings"},compactHeader=true)
                     }
                     if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error)
-                    if(state.tv!=null) {
-                        Text(state.message,fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
 
-                    }
-                    if(screen !in setOf("devices","remote")) TextButton(onClick={screen=if(state.tv==null) "devices" else "remote"}) { Text("Back to remote") }
                 }
             }
         }
+        if(quickTv) QuickTvPicker(vm,onDismiss={quickTv=false})
         certificateReview?.let { review -> CertificateReviewDialog(review,vm.connection::approveCertificate,vm.connection::cancelCertificateReview) }
         if(resetCertificate) AlertDialog(onDismissRequest={resetCertificate=false},title={Text("Reset TV Certificate Trust?")},text={Text("Remove the approved certificate for ${state.tv?.name ?: "this TV"} and disconnect. The next connection uses normal TLS verification and may require a new fingerprint review. Samsung pairing credentials are separate and remain saved.")},confirmButton={TextButton(onClick={resetCertificate=false;vm.connection.resetCertificate()}) { Text("Reset trust") }},dismissButton={TextButton(onClick={resetCertificate=false}) { Text("Cancel") }})
     }
 }
-@Composable internal fun RemoteButton(label:String,key:RemoteKey,enabled:Boolean,send:(RemoteKey)->Unit) {
+@Composable internal fun RemoteButton(label:String,key:RemoteKey,enabled:Boolean,send:(RemoteKey)->Unit,compact:Boolean=false) {
     val interaction=remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val appearance=com.indianservers.samsungsmarttvremote.ui.theme.LocalAppearance.current
@@ -200,7 +238,7 @@ internal val Cobalt: Color @Composable get()=MaterialTheme.colorScheme.primary
     }
     FilledTonalButton(onClick={if(!repeated) send(key)},interactionSource=interaction,enabled=active,contentPadding=PaddingValues(horizontal=14.dp,vertical=14.dp),modifier=Modifier.heightIn(min=(52*appearance.buttonSize).dp).graphicsLayer { scaleX=pressScale; scaleY=pressScale }.semantics { contentDescription=key.accessibleLabel() }) {
         RemoteGlyph(key,LocalContentColor.current)
-        if(key !in setOf(RemoteKey.UP,RemoteKey.DOWN,RemoteKey.LEFT,RemoteKey.RIGHT,RemoteKey.VOLUP,RemoteKey.VOLDOWN,RemoteKey.CHUP,RemoteKey.CHDOWN)) {
+        if(!compact && key !in setOf(RemoteKey.UP,RemoteKey.DOWN,RemoteKey.LEFT,RemoteKey.RIGHT,RemoteKey.VOLUP,RemoteKey.VOLDOWN,RemoteKey.CHUP,RemoteKey.CHDOWN)) {
             Spacer(Modifier.width(6.dp)); Text(label.filter { it.isLetter() || it==' ' }.trim(),fontWeight=FontWeight.SemiBold)
         }
     }
